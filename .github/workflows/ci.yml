@@ -13,26 +13,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build tests (debug)
-        run: swift build --build-tests
-
-      - name: Test (直接执行 xctest bundle，实时输出 + 看门狗)
+      - name: 选用最新 Xcode（与本地开发工具链一致）
         run: |
-          set +e
-          FAILED=0
-          BUNDLES=$(find .build -name "*.xctest" -not -path "*intermediates*" | sort -u)
-          if [[ -z "$BUNDLES" ]]; then echo "❌ 找不到任何 xctest bundle"; exit 1; fi
-          for BUNDLE in $BUNDLES; do
-            echo ""
-            echo "════ $BUNDLE 开始 $(date -u +%H:%M:%S) ════"
-            NSUnbufferedIO=YES xcrun xctest "$BUNDLE" 2>&1 & PID=$!
-            ( sleep 1500; echo "⏰ 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
-            wait $PID; RC=$?
-            kill $W 2>/dev/null
-            echo "════ $BUNDLE 结束 rc=$RC $(date -u +%H:%M:%S) ════"
-            [ $RC -ne 0 ] && FAILED=1
-          done
-          exit $FAILED
+          NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "选择: $NEWEST"
+          sudo xcode-select -s "$NEWEST/Contents/Developer"
+          xcodebuild -version
+          swift --version 2>&1 | head -1
+
+      - name: Test (swift test + 25 分钟看门狗)
+        run: |
+          swift test 2>&1 & PID=$!
+          ( sleep 1500; echo "⏰ 测试超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
+          wait $PID; RC=$?
+          kill $W 2>/dev/null || true
+          echo "测试退出码: $RC"
+          exit $RC
 
       - name: Package .app
         run: scripts/build-app.sh
