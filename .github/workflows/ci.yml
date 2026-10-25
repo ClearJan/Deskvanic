@@ -16,8 +16,14 @@ jobs:
       - name: Build
         run: swift build -c release
 
-      - name: Test
-        run: swift test
+      - name: Test (25 分钟看门狗，防止环境性用例挂起)
+        run: |
+          swift test 2>&1 & TEST_PID=$!
+          ( sleep 1500; echo "⏰ 测试超时（25 分钟），强制结束"; pkill -P $TEST_PID; kill $TEST_PID ) & WATCH_PID=$!
+          wait $TEST_PID; RC=$?
+          kill $WATCH_PID 2>/dev/null || true
+          echo "测试退出码: $RC"
+          exit $RC
 
       - name: Package .app
         run: scripts/build-app.sh
