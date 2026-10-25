@@ -13,37 +13,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 选用最新 Xcode
-        run: |
-          NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
-          echo "选择: $NEWEST"
-          sudo xcode-select -s "$NEWEST/Contents/Developer"
-          swift --version 2>&1 | head -1
-
       - name: Build tests
         run: swift build --build-tests
 
-      # 说明：本仓库 swift-testing 在 GitHub 无头 runner 上经 SwiftPM 执行器会静默挂起
-      # （本地 swift test 正常），因此直接以 xctest 运行 bundle——两者用例完全一致。
-      - name: Test (直接执行 bundle + 看门狗 + 防假绿守卫)
+      # 说明：GitHub 无头 runner 上 `swift test` 的执行层会静默挂起（Xcode 26.x 已知问题，
+      # swiftlang/swift-package-manager#8394 / actions/runner-images#13096），
+      # 因此直接调用 SwiftPM 同款执行器 swiftpm-testing-helper 运行 swift-testing 用例。
+      - name: Test (testing-helper 直跑 + 看门狗 + 防假绿守卫)
         run: |
           set +e
           FAILED=0
+          TOOLCHAIN_BIN=$(dirname "$(xcrun -f swift)")
+          HELPER="$TOOLCHAIN_BIN/../libexec/swift/pm/swiftpm-testing-helper"
+          HELPER=$(cd "$(dirname "$HELPER")" && pwd)/$(basename "$HELPER")
+          PLATFORM_DIR=$(xcrun --show-sdk-platform-path)
+          export DYLD_LIBRARY_PATH="$PLATFORM_DIR/Developer/usr/lib"
+          export DYLD_FRAMEWORK_PATH="$PLATFORM_DIR/Developer/Library/Frameworks"
+          export NSUnbufferedIO=YES
+
           BUNDLES=$(find .build -name "*.xctest" -not -path "*intermediates*" | sort -u)
           if [[ -z "$BUNDLES" ]]; then echo "❌ 找不到任何 xctest bundle"; exit 1; fi
-          for BUNDLE in $BUNDLES; do
+
+          for B in $BUNDLES; do
+            NAME=$(basename "${B%.xctest}")
+            BIN="$B/Contents/MacOS/$NAME"
             echo ""
-            echo "════ $BUNDLE 开始 $(date -u +%H:%M:%S) ════"
+            echo "════ $NAME 开始 $(date -u +%H:%M:%S) ════"
             OUT=$(mktemp)
-            # SWIFT_TESTING_ENABLED=1：xctest 桥默认不激活 swift-testing 用例发现，必须显式开启
-            SWIFT_TESTING_ENABLED=1 NSUnbufferedIO=YES xcrun xctest "$BUNDLE" 2>&1 | tee "$OUT" & PID=$!
+            "$HELPER" --test-bundle-path "$BIN" "$BIN" --testing-library swift-testing 2>&1 | tee "$OUT" & PID=$!
             ( sleep 1500; echo "⏰ 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
             wait $PID; RC=$?
             kill $W 2>/dev/null
             PASSED=$(grep -cE "✔ Test .* passed" "$OUT" || true)
             FAILED_N=$(grep -cE "✘" "$OUT" || true)
             RUNS=$(grep -cE "Test run with" "$OUT" || true)
-            echo "════ $BUNDLE 结束 rc=$RC 通过=$PASSED 失败=$FAILED_N $(date -u +%H:%M:%S) ════"
+            echo "════ $NAME 结束 rc=$RC 通过=$PASSED 失败=$FAILED_N $(date -u +%H:%M:%S) ════"
             rm -f "$OUT"
             # 防假绿：一个用例都没执行 = 执行层没工作，必须红
             if [ "$RC" -ne 0 ] || [ "$PASSED" -eq 0 ] || [ "$FAILED_N" -gt 0 ] || [ "$RUNS" -eq 0 ]; then
