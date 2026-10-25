@@ -1,0 +1,19 @@
+# Build artifacts
+.build/
+build/
+DerivedData/
+dist/
+*.xcodeproj/
+OneDesk.app
+
+# Caches
+*.swiftpm/
+.DS_Store
+.swiftlint.cache
+
+# Test artifacts
+TestResults/
+*.xcresult
+
+# Local-only notes
+.env

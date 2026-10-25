@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Hardened Runtime 下本地网络监听所需 -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- 语音识别 -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- Apple Events（工作空间启动应用） -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<!-- 用户选定的文件/文件夹访问（安全书签） -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+</dict>
+</plist>

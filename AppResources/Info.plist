@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>Deskvanic</string>
+	<key>CFBundleDisplayName</key>
+	<string>Deskvanic</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.deskvanic.app</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleExecutable</key>
+	<string>DeskvanicApp</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Deskvanic 需要麦克风权限以进行语音输入与转写。录音默认保存在本机，不会上传。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Deskvanic 需要语音识别权限以将录音转写为文字。识别在允许范围内于本机完成。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Deskvanic 需要本地网络权限以在可信设备之间传输文件。传输仅在局域网内进行。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_deskvanic._tcp</string>
+	</array>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Deskvanic 需要发送 Apple 事件以在你启动工作空间时打开指定应用。</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Deskvanic 需要相机权限以识别二维码。</string>
+</dict>
+</plist>
