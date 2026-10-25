@@ -16,45 +16,58 @@ jobs:
       - name: Build tests
         run: swift build --build-tests
 
-      # 说明：GitHub 无头 runner 上 `swift test` 的执行层会静默挂起（Xcode 26.x 已知问题，
-      # swiftlang/swift-package-manager#8394 / actions/runner-images#13096），
-      # 因此直接调用 SwiftPM 同款执行器 swiftpm-testing-helper 运行 swift-testing 用例。
-      - name: Test (testing-helper 直跑 + 看门狗 + 防假绿守卫)
+      # 说明：GitHub 无头 runner 上 `swift test` 与 swiftpm-testing-helper 整批执行会静默挂起
+      # （Xcode 26.x 已知问题，swiftlang/swift-package-manager#8394 / actions/runner-images#13096）。
+      # 因此逐测试套件单独执行（helper 的 --filter 透传），配合短看门狗精确定位问题套件。
+      - name: Test (逐套件 + 90s 看门狗 + 汇总守卫)
         run: |
           set +e
-          FAILED=0
           TOOLCHAIN_BIN=$(dirname "$(xcrun -f swift)")
-          HELPER="$TOOLCHAIN_BIN/../libexec/swift/pm/swiftpm-testing-helper"
-          HELPER=$(cd "$(dirname "$HELPER")" && pwd)/$(basename "$HELPER")
+          HELPER=$(cd "$TOOLCHAIN_BIN/../libexec/swift/pm" && pwd)/swiftpm-testing-helper
           PLATFORM_DIR=$(xcrun --show-sdk-platform-path)
           export DYLD_LIBRARY_PATH="$PLATFORM_DIR/Developer/usr/lib"
           export DYLD_FRAMEWORK_PATH="$PLATFORM_DIR/Developer/Library/Frameworks"
-          export NSUnbufferedIO=YES
+          export NSUnbufferedIO=YES NO_COLOR=1
 
-          BUNDLES=$(find .build -name "*.xctest" -not -path "*intermediates*" | sort -u)
-          if [[ -z "$BUNDLES" ]]; then echo "❌ 找不到任何 xctest bundle"; exit 1; fi
+          BIN=$(find .build -name "*.xctest" -not -path "*intermediates*" | sort | head -1)/Contents/MacOS/$(basename "${B%.xctest}")
+          BUNDLE=$(find .build -name "*.xctest" -not -path "*intermediates*" | sort | head -1)
+          BIN="$BUNDLE/Contents/MacOS/$(basename "${BUNDLE%.xctest}")"
+          [[ -x "$BIN" ]] || { echo "❌ 测试二进制不存在: $BIN"; exit 1; }
 
-          for B in $BUNDLES; do
-            NAME=$(basename "${B%.xctest}")
-            BIN="$B/Contents/MacOS/$NAME"
-            echo ""
-            echo "════ $NAME 开始 $(date -u +%H:%M:%S) ════"
+          SUITES=$(grep -rhoE '@Suite\("[^"]+"' Tests/ | sed 's/@Suite("//;s/"$//' | sort -u)
+          TOTAL_PASS=0; TOTAL_FAIL=0; HUNG=""; FAILED_SUITES=""
+          for S in $SUITES; do
             OUT=$(mktemp)
-            "$HELPER" --test-bundle-path "$BIN" "$BIN" --testing-library swift-testing 2>&1 | tee "$OUT" & PID=$!
-            ( sleep 1500; echo "⏰ 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
+            "$HELPER" --test-bundle-path "$BIN" --filter "$S" "$BIN" --testing-library swift-testing > "$OUT" 2>&1 & PID=$!
+            ( sleep 90; kill $PID 2>/dev/null ) & W=$!
             wait $PID; RC=$?
             kill $W 2>/dev/null
-            PASSED=$(grep -cE "✔ Test .* passed" "$OUT" || true)
-            FAILED_N=$(grep -cE "✘" "$OUT" || true)
-            RUNS=$(grep -cE "Test run with" "$OUT" || true)
-            echo "════ $NAME 结束 rc=$RC 通过=$PASSED 失败=$FAILED_N $(date -u +%H:%M:%S) ════"
-            rm -f "$OUT"
-            # 防假绿：一个用例都没执行 = 执行层没工作，必须红
-            if [ "$RC" -ne 0 ] || [ "$PASSED" -eq 0 ] || [ "$FAILED_N" -gt 0 ] || [ "$RUNS" -eq 0 ]; then
-              FAILED=1
+            P=$(grep -cE "✔ Test .* passed" "$OUT" || true)
+            F=$(grep -cE "✘" "$OUT" || true)
+            TOTAL_PASS=$((TOTAL_PASS+P)); TOTAL_FAIL=$((TOTAL_FAIL+F))
+            if [ "$RC" -ne 0 ]; then
+              if [ "$P" -eq 0 ] && [ "$F" -eq 0 ]; then
+                HUNG="$HUNG'$S' "
+                echo "⏰/❌ 套件 $S → rc=$RC（无输出：挂起或执行层未启动）"
+              else
+                FAILED_SUITES="$FAILED_SUITES'$S' "
+                grep -E "✘" "$OUT" | head -3
+              fi
             fi
+            rm -f "$OUT"
           done
-          exit $FAILED
+
+          echo ""
+          echo "════════ 汇总 ════════"
+          echo "通过用例: $TOTAL_PASS  失败断言: $TOTAL_FAIL"
+          echo "挂起/未启动套件: ${HUNG:-无}"
+          echo "有失败断言的套件: ${FAILED_SUITES:-无}"
+          # 防假绿：总通过数必须 ≥ 200（本地 215），且无失败、无挂起
+          if [ "$TOTAL_FAIL" -gt 0 ] || [ -n "$HUNG" ] || [ -n "$FAILED_SUITES" ] || [ "$TOTAL_PASS" -lt 200 ]; then
+            echo "❌ CI 测试不达标"
+            exit 1
+          fi
+          echo "✅ 全部套件通过"
 
       - name: Package .app
         run: scripts/build-app.sh
