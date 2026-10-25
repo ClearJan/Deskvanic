@@ -230,9 +230,11 @@ public struct VoiceDockView: View {
 
     private func startRecording() async {
         do {
-            // 词典注入
-            engine.userDictionary = Dictionary(parseDictionary(), uniquingKeysWith: { _, new in new })
-            engine.localeIdentifier = forceOnDevice ? localeIdentifier : localeIdentifier
+            // 词典注入（经 actor 方法，Swift 6 禁止 MainActor 直接改写 actor 属性）
+            await engine.configure(
+                userDictionary: Dictionary(parseDictionary(), uniquingKeysWith: { _, new in new }),
+                localeIdentifier: localeIdentifier
+            )
             try await engine.startRecording()
             await syncState()
             // 轮询部分结果

@@ -44,6 +44,12 @@ public actor VoiceEngine {
     /// 语言标识（zh-CN / en-US 等）。
     public var localeIdentifier: String = "zh-CN"
 
+    /// MainActor 侧统一注入配置（actor 属性必须经 actor 方法改写）。
+    public func configure(userDictionary: [String: String], localeIdentifier: String) {
+        self.userDictionary = userDictionary
+        self.localeIdentifier = localeIdentifier
+    }
+
     // MARK: - 权限
 
     public static func requestPermissions() async -> Bool {
