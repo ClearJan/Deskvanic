@@ -133,6 +133,12 @@ struct TaskQueueTests {
         try await waitUntil(timeout: 2) {
             await queue.historyItems.first { $0.id == id }?.state == .finished
         }
+        // 流式更新经 Task 异步投递，慢环境下可能晚于 history 就绪；轮询等待到账（限时 3s）
+        try await waitUntil(timeout: 3) {
+            let updates = await collector.updates
+            return updates.contains { $0.id == id && $0.progress == 0.5 }
+                && updates.contains { $0.id == id && $0.state == .finished && $0.progress == 1 }
+        }
         let updates = await collector.updates
         let progressUpdate = updates.first { $0.id == id && $0.progress == 0.5 }
         #expect(progressUpdate?.message == "半程")
