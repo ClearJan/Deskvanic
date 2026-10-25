@@ -51,7 +51,8 @@ jobs:
                 echo "⏰/❌ 套件 $S → rc=$RC（无输出：挂起或执行层未启动）"
               else
                 FAILED_SUITES="$FAILED_SUITES'$S' "
-                grep -E "✘" "$OUT" | head -3
+                echo "--- 套件 $S 输出尾部 ---"
+                tail -15 "$OUT"
               fi
             fi
             rm -f "$OUT"
