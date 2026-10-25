@@ -16,19 +16,22 @@ jobs:
       - name: Build tests (debug)
         run: swift build --build-tests
 
-      - name: Test (逐 bundle 实时输出 + 分段看门狗)
+      - name: Test (直接执行 xctest bundle，实时输出 + 看门狗)
         run: |
           set +e
           FAILED=0
-          for BUNDLE in DeskvanicCoreTests DeskvanicModuleTests; do
+          for NAME in DeskvanicCoreTests DeskvanicModuleTests; do
+            BUNDLE=$(find .build -name "$NAME.xctest" -not -path "*/\.*intermediates/*" | head -1)
+            if [[ -z "$BUNDLE" ]]; then
+              echo "❌ 找不到 $NAME.xctest"; find .build -name "*.xctest" | head -5; FAILED=1; continue
+            fi
             echo ""
-            echo "════ $BUNDLE 开始 $(date -u +%H:%M:%S) ════"
-            xcrun xctest ".build/debug/$BUNDLE.xctest" 2>&1 & PID=$!
-            LIMIT=1500
-            ( sleep $LIMIT; echo "⏰ $BUNDLE 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
+            echo "════ $NAME ($BUNDLE) 开始 $(date -u +%H:%M:%S) ════"
+            NSUnbufferedIO=YES xcrun xctest "$BUNDLE" 2>&1 & PID=$!
+            ( sleep 1500; echo "⏰ $NAME 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
             wait $PID; RC=$?
             kill $W 2>/dev/null
-            echo "════ $BUNDLE 结束 rc=$RC $(date -u +%H:%M:%S) ════"
+            echo "════ $NAME 结束 rc=$RC $(date -u +%H:%M:%S) ════"
             [ $RC -ne 0 ] && FAILED=1
           done
           exit $FAILED
