@@ -35,7 +35,8 @@ jobs:
             echo ""
             echo "════ $BUNDLE 开始 $(date -u +%H:%M:%S) ════"
             OUT=$(mktemp)
-            NSUnbufferedIO=YES xcrun xctest "$BUNDLE" 2>&1 | tee "$OUT" & PID=$!
+            # SWIFT_TESTING_ENABLED=1：xctest 桥默认不激活 swift-testing 用例发现，必须显式开启
+            SWIFT_TESTING_ENABLED=1 NSUnbufferedIO=YES xcrun xctest "$BUNDLE" 2>&1 | tee "$OUT" & PID=$!
             ( sleep 1500; echo "⏰ 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
             wait $PID; RC=$?
             kill $W 2>/dev/null
