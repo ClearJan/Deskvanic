@@ -13,17 +13,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
-        run: swift build -c release
+      - name: Build tests (debug)
+        run: swift build --build-tests
 
-      - name: Test (25 分钟看门狗，防止环境性用例挂起)
+      - name: Test (逐 bundle 实时输出 + 分段看门狗)
         run: |
-          swift test 2>&1 & TEST_PID=$!
-          ( sleep 1500; echo "⏰ 测试超时（25 分钟），强制结束"; pkill -P $TEST_PID; kill $TEST_PID ) & WATCH_PID=$!
-          wait $TEST_PID; RC=$?
-          kill $WATCH_PID 2>/dev/null || true
-          echo "测试退出码: $RC"
-          exit $RC
+          set +e
+          FAILED=0
+          for BUNDLE in DeskvanicCoreTests DeskvanicModuleTests; do
+            echo ""
+            echo "════ $BUNDLE 开始 $(date -u +%H:%M:%S) ════"
+            xcrun xctest ".build/debug/$BUNDLE.xctest" 2>&1 & PID=$!
+            LIMIT=1500
+            ( sleep $LIMIT; echo "⏰ $BUNDLE 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
+            wait $PID; RC=$?
+            kill $W 2>/dev/null
+            echo "════ $BUNDLE 结束 rc=$RC $(date -u +%H:%M:%S) ════"
+            [ $RC -ne 0 ] && FAILED=1
+          done
+          exit $FAILED
 
       - name: Package .app
         run: scripts/build-app.sh
