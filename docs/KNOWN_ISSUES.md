@@ -13,6 +13,7 @@
 7. **语音识别语言覆盖**：设备端识别以系统支持为准；不支持设备端的语种明确标注"将使用服务器识别"，不静默上传。
 8. **SQLite FTS unicode61**：无内置中文分词；采用 CJK 逐字切分（写入/查询双侧一致），词组匹配正确但无词级语义（够用；未来可换 jieba 类分词器）。
 9. **ZIP64 不支持**：单条目 >4GB 时明确报错（非静默失败）。
+10. **GitHub Actions 无头 VM 无法运行 socket 与媒体类测试**（2026-10 记录）：GitHub 托管 macOS VM 上 NWListener 入站连接不会完成、虚拟 GPU 媒体栈缺失（`IOServiceMatching failed: AppleM2ScalerParavirtDriver`），且 `swift test` 执行层静默挂起（SwiftPM #8394 / runner-images #13096）。CI 采用 SwiftPM 同款执行器 `swiftpm-testing-helper` 逐套件运行；`NearLinkServer` 与 `端到端工作流` 两套件在检测到 `GITHUB_ACTIONS` 时带原因跳过（本地 macOS 全量通过，215 用例含 6 条端到端工作流）。这是 CI 环境的平台限制，不代表产品功能缺失——真实 Mac 上局域网传输与媒体处理均已验证。
 
 ## 待办（Backlog，非阻断）
 
