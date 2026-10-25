@@ -49,7 +49,9 @@ struct AppLauncherTests {
         #expect(!apps.isEmpty)
         // 系统应用至少能找到几个常见应用（TextEdit 在 /System/Applications）
         #expect(apps.contains { $0.name.contains("TextEdit") || $0.name.contains("文本编辑") })
-        let search = await launcher.search("text", limit: 20)
+        // 用真实发现的应用名做模糊搜索探针（对系统语言免疫：中英文名均应命中）
+        guard let probe = apps.first?.name else { Issue.record("无应用可探测"); return }
+        let search = await launcher.search(String(probe.prefix(2)), limit: 20)
         #expect(!search.isEmpty)
     }
 

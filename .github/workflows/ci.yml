@@ -13,22 +13,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 选用最新 Xcode（与本地开发工具链一致）
+      - name: 选用最新 Xcode
         run: |
           NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
           echo "选择: $NEWEST"
           sudo xcode-select -s "$NEWEST/Contents/Developer"
-          xcodebuild -version
           swift --version 2>&1 | head -1
 
-      - name: Test (swift test + 25 分钟看门狗)
+      - name: Build tests
+        run: swift build --build-tests
+
+      # 说明：本仓库 swift-testing 在 GitHub 无头 runner 上经 SwiftPM 执行器会静默挂起
+      # （本地 swift test 正常），因此直接以 xctest 运行 bundle——两者用例完全一致。
+      - name: Test (直接执行 bundle + 看门狗 + 防假绿守卫)
         run: |
-          swift test 2>&1 & PID=$!
-          ( sleep 1500; echo "⏰ 测试超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
-          wait $PID; RC=$?
-          kill $W 2>/dev/null || true
-          echo "测试退出码: $RC"
-          exit $RC
+          set +e
+          FAILED=0
+          BUNDLES=$(find .build -name "*.xctest" -not -path "*intermediates*" | sort -u)
+          if [[ -z "$BUNDLES" ]]; then echo "❌ 找不到任何 xctest bundle"; exit 1; fi
+          for BUNDLE in $BUNDLES; do
+            echo ""
+            echo "════ $BUNDLE 开始 $(date -u +%H:%M:%S) ════"
+            OUT=$(mktemp)
+            NSUnbufferedIO=YES xcrun xctest "$BUNDLE" 2>&1 | tee "$OUT" & PID=$!
+            ( sleep 1500; echo "⏰ 超时（25 分钟），强制结束"; pkill -P $PID; kill $PID ) & W=$!
+            wait $PID; RC=$?
+            kill $W 2>/dev/null
+            PASSED=$(grep -cE "✔ Test .* passed" "$OUT" || true)
+            FAILED_N=$(grep -cE "✘" "$OUT" || true)
+            RUNS=$(grep -cE "Test run with" "$OUT" || true)
+            echo "════ $BUNDLE 结束 rc=$RC 通过=$PASSED 失败=$FAILED_N $(date -u +%H:%M:%S) ════"
+            rm -f "$OUT"
+            # 防假绿：一个用例都没执行 = 执行层没工作，必须红
+            if [ "$RC" -ne 0 ] || [ "$PASSED" -eq 0 ] || [ "$FAILED_N" -gt 0 ] || [ "$RUNS" -eq 0 ]; then
+              FAILED=1
+            fi
+          done
+          exit $FAILED
 
       - name: Package .app
         run: scripts/build-app.sh
