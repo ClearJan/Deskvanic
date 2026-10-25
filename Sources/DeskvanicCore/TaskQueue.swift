@@ -117,7 +117,8 @@ public actor TaskQueue {
             continuations[id] = continuation
             for update in recentUpdates.suffix(50) { continuation.yield(update) }
             continuation.onTermination = { [weak self] _ in
-                Task { await self?.removeContinuation(id) }
+                guard let queue = self else { return }
+                Task { await queue.removeContinuation(id) }
             }
         }
     }

@@ -118,7 +118,8 @@ public actor VoiceEngine {
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
             try? file.write(from: buffer)
             request.append(buffer)
-            Task { await self?.noteSpeechActivity() }
+            guard let engine = self else { return }
+            Task { await engine.noteSpeechActivity() }
         }
         tapInstalled = true
 
@@ -138,7 +139,8 @@ public actor VoiceEngine {
                 // 用户主动停止的常规结束不算错误
                 return nsError?.code == 203 || nsError?.code == 1101 ? nil : error.localizedDescription
             }()
-            Task { await self?.handleRecognitionValues(text: text, isFinal: isFinal, errorMessage: message) }
+            guard let engine = self else { return }
+            Task { await engine.handleRecognitionValues(text: text, isFinal: isFinal, errorMessage: message) }
         }
     }
 
