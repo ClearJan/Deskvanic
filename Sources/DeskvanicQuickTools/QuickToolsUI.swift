@@ -670,7 +670,6 @@ private struct UnitPane: View {
 private struct TimerPane: View {
     @State private var state = CountdownState(durationSeconds: 300)
     @State private var durationMinutes = 5
-    @State private var timer: Timer?
 
     var body: some View {
         ToolShell(title: "计时器") {
@@ -682,14 +681,12 @@ private struct TimerPane: View {
                 Button(state.phase == .paused ? "继续" : "开始") {
                     state.durationSeconds = durationMinutes * 60
                     state.start(at: Date())
-                    schedule()
                 }
                 .disabled(state.phase == .running || state.phase == .finished)
                 Button("暂停") { state.pause() }
                     .disabled(state.phase != .running)
                 Button("复位") {
                     state = CountdownState(durationSeconds: durationMinutes * 60)
-                    timer?.invalidate()
                 }
             }
             if state.phase == .finished {
@@ -698,23 +695,22 @@ private struct TimerPane: View {
                     .font(.headline)
             }
         }
-        .onDisappear { timer?.invalidate() }
+        // phase 变化驱动循环启停；视图消失自动取消
+        .task(id: state.phase) {
+            guard state.phase == .running else { return }
+            while state.phase == .running {
+                try? await Task.sleep(for: .milliseconds(250))
+                if state.tick(at: Date()) {
+                    NSSound.beep()
+                    break
+                }
+            }
+        }
     }
 
     private var timeText: String {
         let total = state.remainingSeconds
         return String(format: "%02d:%02d", total / 60, total % 60)
-    }
-
-    private func schedule() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
-            let finished = state.tick(at: Date())
-            if finished {
-                timer?.invalidate()
-                NSSound.beep()
-            }
-        }
     }
 }
 
@@ -723,7 +719,6 @@ private struct PomodoroPane: View {
     @State private var workMinutes = 25
     @State private var breakMinutes = 5
     @State private var targetSessions = 4
-    @State private var timer: Timer?
     @State private var lastEvent = ""
 
     var body: some View {
@@ -747,7 +742,6 @@ private struct PomodoroPane: View {
                     state = PomodoroState(
                         workMinutes: workMinutes, breakMinutes: breakMinutes,
                         targetSessions: targetSessions)
-                    timer?.invalidate()
                     lastEvent = ""
                 }
                 Spacer()
@@ -758,7 +752,25 @@ private struct PomodoroPane: View {
                 Label(lastEvent, systemImage: "bell.fill").foregroundStyle(.orange)
             }
         }
-        .onDisappear { timer?.invalidate() }
+        // phase 变化驱动循环启停；视图消失自动取消
+        .task(id: state.phase) {
+            while state.phase == .work || state.phase == .breakTime {
+                try? await Task.sleep(for: .milliseconds(250))
+                switch state.tick(at: Date()) {
+                case .workFinished:
+                    lastEvent = "专注完成，休息一下"
+                    NSSound.beep()
+                case .breakFinished:
+                    lastEvent = "休息结束，开始新一轮专注"
+                    NSSound.beep()
+                case .allFinished:
+                    lastEvent = "全部目标轮次完成！"
+                    NSSound.beep()
+                case .none:
+                    break
+                }
+            }
+        }
     }
 
     private var timeText: String {
@@ -772,32 +784,10 @@ private struct PomodoroPane: View {
                 workMinutes: workMinutes, breakMinutes: breakMinutes,
                 targetSessions: targetSessions)
             state.start(at: Date())
-            schedule()
         } else if state.phase == .breakTime {
             state.phase = .work
             state.countdown = CountdownState(durationSeconds: state.workDurationSeconds)
             state.countdown.start(at: Date())
-        }
-    }
-
-    private func schedule() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
-            let event = state.tick(at: Date())
-            switch event {
-            case .workFinished:
-                lastEvent = "专注完成，休息一下"
-                NSSound.beep()
-            case .breakFinished:
-                lastEvent = "休息结束，开始新一轮专注"
-                NSSound.beep()
-            case .allFinished:
-                lastEvent = "全部目标轮次完成！"
-                NSSound.beep()
-                timer?.invalidate()
-            case .none:
-                break
-            }
         }
     }
 }
