@@ -41,7 +41,7 @@ jobs:
 
           # --filter 匹配测试标识符（类型名），而非 @Suite 中文显示名
           SUITES=$(grep -rhoE '(struct|class) [A-Za-z0-9_]+Tests' Tests/ | awk '{print $2}' | sort -u)
-          TOTAL_PASS=0; TOTAL_FAIL=0; HUNG=""; FAILED_SUITES=""
+          TOTAL_PASS=0; TOTAL_FAIL=0; TOTAL_SKIP=0; HUNG=""; FAILED_SUITES=""
           for S in $SUITES; do
             OUT=$(mktemp)
             "$HELPER" --test-bundle-path "$BIN" --filter "$S" "$BIN" --testing-library swift-testing > "$OUT" 2>&1 & PID=$!
@@ -49,7 +49,10 @@ jobs:
             wait $PID; RC=$?
             kill $W 2>/dev/null
             P=$(grep -cE "✔ Test .* passed" "$OUT" || true)
-            F=$(grep -cE "✘" "$OUT" || true)
+            # 真实失败 = recorded an issue / failed after；runner 旧版 swift-testing 用 ✘ 打印 skipped 行，须排除
+            F=$(grep -cE "✘ Test .* (recorded an issue|failed after)" "$OUT" || true)
+            SKIP=$(grep -c " skipped: " "$OUT" || true)
+            TOTAL_SKIP=$((TOTAL_SKIP+SKIP))
             Z=$(grep -c "Test run with 0 tests" "$OUT" || true)
             TOTAL_PASS=$((TOTAL_PASS+P)); TOTAL_FAIL=$((TOTAL_FAIL+F))
             if [ "$RC" -ge 124 ]; then
@@ -68,7 +71,7 @@ jobs:
 
           echo ""
           echo "════════ 汇总 ════════"
-          echo "通过用例: $TOTAL_PASS  失败断言: $TOTAL_FAIL"
+          echo "通过用例: $TOTAL_PASS  失败断言: $TOTAL_FAIL  环境跳过: $TOTAL_SKIP（原因见上方 skipped 行）"
           echo "挂起套件: ${HUNG:-无}"
           echo "失败套件: ${FAILED_SUITES:-无}"
           # 防假绿：总通过数必须 ≥ 200（全量 215），且无失败、无挂起
