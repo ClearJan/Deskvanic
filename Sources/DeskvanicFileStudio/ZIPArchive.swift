@@ -501,12 +501,13 @@ public enum ZIPArchive {
         let components = calendar.dateComponents(
             [.year, .month, .day, .hour, .minute, .second], from: date)
         let year = max(1980, min(2107, components.year ?? 1980))
-        let dosDate = UInt16(((year - 1980) << 9)
-            | ((components.month ?? 1) << 5)
-            | (components.day ?? 1))
-        let dosTime = UInt16(((components.hour ?? 0) << 11)
-            | ((components.minute ?? 0) << 5)
-            | ((components.second ?? 0) / 2))
+        let month = components.month ?? 1
+        let day = components.day ?? 1
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        let second = components.second ?? 0
+        let dosDate = UInt16(((year - 1980) << 9) | (month << 5) | day)
+        let dosTime = UInt16((hour << 11) | (minute << 5) | (second / 2))
         return (dosTime, dosDate)
     }
 }
